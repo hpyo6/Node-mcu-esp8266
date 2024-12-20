@@ -1,0 +1,20 @@
+#include <ESP8266WiFi.h>
+#include <WiFiManager.h> // Install via Library Manager
+void setup() {
+  Serial.begin(115200);
+  Serial.println();
+  WiFiManager wifiManager;
+  // Start WiFi configuration portal
+  if (!wifiManager.autoConnect("ESP_Config_AP", "config123")) {
+    Serial.println("Failed to connect and hit timeout");
+    delay(3000);
+    ESP.restart();
+    delay(5000);
+  }
+  Serial.println("Connected to WiFi!");
+  Serial.println("IP Address: ");
+  Serial.println(WiFi.localIP());
+}
+void loop() {
+  // Your main code here
+}
