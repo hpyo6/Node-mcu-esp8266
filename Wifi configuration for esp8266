@@ -18,3 +18,96 @@ void setup() {
 void loop() {
   // Your main code here
 }
+
+
+//OR, WITHOUT USING WIFIMANAGER & HAVING FULL CONTROL OVER THE CONFIGURATION
+
+
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <EEPROM.h>
+
+ESP8266WebServer server(80);
+
+String ssid = "";
+String password = "";
+
+void saveCredentials(const String &newSSID, const String &newPassword) {
+  EEPROM.begin(512);
+  for (int i = 0; i < 32; i++) {
+    EEPROM.write(i, i < newSSID.length() ? newSSID[i] : 0);
+    EEPROM.write(i + 32, i < newPassword.length() ? newPassword[i] : 0);
+  }
+  EEPROM.commit();
+
+void loadCredentials() {
+  char ssidArr[32];
+  char passArr[32];
+  EEPROM.begin(512);
+  for (int i = 0; i < 32; i++) {
+    ssidArr[i] = EEPROM.read(i);
+    passArr[i] = EEPROM.read(i + 32);
+  }
+  ssidArr[31] = 0;
+  passArr[31] = 0;
+  ssid = String(ssidArr);
+  password = String(passArr);
+}
+
+void handleRoot() {
+  String page = "<form action='/save' method='POST'>"
+                "SSID: <input type='text' name='ssid'><br>"
+                "Password: <input type='password' name='password'><br>"
+                "<input type='submit' value='Save'></form>";
+  server.send(200, "text/html", page);
+}
+
+void handleSave() {
+  if (server.hasArg("ssid") && server.hasArg("password")) {
+    ssid = server.arg("ssid");
+    password = server.arg("password");
+    saveCredentials(ssid, password);
+    server.send(200, "text/plain", "Credentials saved! Rebooting...");
+    delay(2000);
+    ESP.restart();
+  } else {
+    server.send(400, "text/plain", "Missing SSID or Password");
+  }
+
+void setup() {
+  Serial.begin(115200);
+
+  // Load stored credentials
+  loadCredentials();
+  Serial.println("Loaded SSID: " + ssid);
+  Serial.println("Loaded Password: " + password);
+
+  // Try to connect to saved Wi-Fi
+  if (ssid.length() > 0) {
+    WiFi.begin(ssid.c_str(), password.c_str());
+    Serial.println("Connecting to WiFi...");
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
+      delay(500);
+      Serial.print(".");
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\nConnected to WiFi!");
+      Serial.println("IP Address: " + WiFi.localIP().toString());
+      return;
+    }
+  }
+
+  // Start AP if Wi-Fi connection fails
+  WiFi.softAP("ESP_Config_AP");
+  Serial.println("Failed to connect. Started AP: ESP_Config_AP");
+  Serial.println("Connect to 192.168.4.1 to configure.");
+
+  // Start web server
+  server.on("/", handleRoot);
+  server.on("/save", HTTP_POST, handleSave);
+  server.begin();
+}
+void loop() {
+  server.handleClient();
+}
